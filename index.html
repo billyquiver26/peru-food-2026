@@ -1,0 +1,946 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Peru Food Guide — Maya &amp; Salo · Jun–Jul 2026</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+  /* ── DESIGN TOKENS ───────────────────────────────────────────── */
+  :root {
+    --ink: #1a1614;
+    --paper: #f5f0e8;
+    --cream: #ede7d6;
+    --red: #c0392b;         /* primary accent — section day labels   */
+    --gold: #b8860b;        /* header accent, star color             */
+    --muted: #7a7062;       /* secondary text, card notes            */
+    --border: #d4c9b0;      /* grid lines, card borders              */
+    --detour: #1a4a2e;      /* detour section accent (green)         */
+
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--paper); color: var(--ink); font-family: 'DM Sans', sans-serif; font-weight: 300; line-height: 1.6; }
+
+  /* ── HEADER ──────────────────────────────────────────────────── */
+  .header { background: var(--ink); color: var(--paper); padding: 60px 40px 50px; position: relative; overflow: hidden; }
+  .header::before { content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: repeating-linear-gradient(45deg, transparent, transparent 40px, rgba(255,255,255,0.015) 40px, rgba(255,255,255,0.015) 41px); }
+  .header-inner { max-width: 900px; margin: 0 auto; position: relative; }
+  .header-tag { font-weight: 500; font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--gold); margin-bottom: 16px; }
+
+  .header h1 { font-family: 'Playfair Display', serif; font-size: clamp(42px, 7vw, 80px); font-weight: 900; line-height: 0.95; letter-spacing: -2px; margin-bottom: 20px; }
+  .header h1 em { font-style: italic; font-weight: 400; color: var(--gold); }
+
+  .header-sub { font-size: 14px; color: rgba(245,240,232,0.6); font-weight: 300; letter-spacing: 0.05em; }
+
+  .header-meta { display: flex; gap: 32px; margin-top: 36px; padding-top: 28px; border-top: 1px solid rgba(255,255,255,0.12); flex-wrap: wrap; }
+  .meta-item { display: flex; flex-direction: column; gap: 4px; }
+  .meta-label { font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; color: rgba(245,240,232,0.4); }
+  .meta-val { font-family: 'Playfair Display', serif; font-size: 20px; font-weight: 700; color: var(--paper); }
+
+
+  /* ── CRITERIA BAR ────────────────────────────────────────────── */
+  .criteria-bar { background: var(--red); padding: 14px 40px; }
+  .criteria-inner { max-width: 900px; margin: 0 auto; display: flex; gap: 32px; align-items: center; flex-wrap: wrap; }
+  .crit { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 500; color: rgba(255,255,255,0.9); letter-spacing: 0.04em; }
+  .crit-dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,0.6); flex-shrink: 0; }
+
+
+  /* ── MAIN LAYOUT ─────────────────────────────────────────────── */
+  .main { max-width: 900px; margin: 0 auto; padding: 0 40px 80px; }
+
+  /* ── SECTION ─────────────────────────────────────────────────── */
+  /* One section per destination / neighbourhood / day */
+  .section { margin-top: 60px; }
+  .section-header { display: flex; align-items: baseline; gap: 16px; padding-bottom: 16px; border-bottom: 2px solid var(--ink); }
+  .section.detour .section-header { border-bottom-color: var(--detour); }
+  .section-day { font-size: 10px; font-weight: 500; letter-spacing: 0.2em; text-transform: uppercase; color: var(--red); white-space: nowrap; }
+  .section.detour .section-day { color: var(--detour); }
+  .section-title { font-family: 'Playfair Display', serif; font-size: 28px; font-weight: 700; letter-spacing: -0.5px; }
+  .section-note { font-size: 12px; color: var(--muted); font-style: italic; margin-left: auto; white-space: nowrap; }
+
+  /* ── MAP THUMBNAIL ───────────────────────────────────────────── */
+  /* Leaflet map showing the route segment for this section */
+  .section-map { height: 170px; width: 100%; margin: 0 0 1px 0; border: 1px solid var(--border); border-top: none; overflow: hidden; position: relative; }
+  .section-map .leaflet-control-attribution { font-size: 8px !important; padding: 1px 4px !important; background: rgba(255,255,255,0.7) !important; }
+  .section-map .leaflet-control-zoom { display: none !important; }
+  .section-map .leaflet-grab { cursor: default; }
+
+  /* ── SUB-LABEL ───────────────────────────────────────────────── */
+  /* Optional cuisine/category grouping within a section */
+  .sub-label { display: flex; flex-wrap: wrap; align-items: baseline; gap: 3px 12px; margin: 36px 0 10px; padding: 11px 16px; background: var(--cream); border-left: 4px solid var(--gold); border-radius: 2px; }
+  .sub-label-main { font-size: 14px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink); }
+  .sub-label-note { font-size: 11px; font-weight: 400; color: var(--muted); letter-spacing: 0.02em; }
+
+  /* ── CARD GRID ───────────────────────────────────────────────── */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1px; background: var(--border); border: 1px solid var(--border); margin-top: 1px; }
+
+  /* ── CARD ────────────────────────────────────────────────────── */
+  /* Each card = one establishment. Wraps in <a> linking to Google Maps place_id */
+  /* Link format: https://www.google.com/maps/search/?api=1&query=URLENCODED_NAME&query_place_id=PLACE_ID */
+  .card { background: var(--paper); position: relative; transition: background 0.15s; display: flex; flex-direction: column; }
+  .card-body { display: block; text-decoration: none; color: inherit; padding: 20px 22px 14px; position: relative; cursor: pointer; transition: background 0.15s; }
+  .card-body:hover { background: var(--cream); }
+  .card-body::after { content: '↗'; position: absolute; top: 14px; right: 14px; font-size: 11px; color: var(--muted); opacity: 0; transition: opacity 0.15s; font-weight: 500; }
+  .card-body:hover::after { opacity: 1; }
+  .card-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; gap: 8px; padding-right: 16px; }
+  .card-name { font-family: 'Playfair Display', serif; font-size: 16px; font-weight: 700; line-height: 1.2; letter-spacing: -0.2px; }
+  .card-badges { display: flex; gap: 4px; flex-shrink: 0; align-items: flex-start; flex-wrap: wrap; justify-content: flex-end; }
+  .badge { font-size: 10px; font-weight: 500; letter-spacing: 0.08em; padding: 3px 7px; border-radius: 2px; white-space: nowrap; }
+  .badge-price-1 { background: #e8f5e9; color: #2e7d32; }   /* $ — price_level 1  */
+  .badge-price-2 { background: #fff3e0; color: #e65100; }   /* $$ — price_level 2 */
+  .badge-flag { background: var(--ink); color: var(--paper); } /* ⚑ — verify first  */
+  .badge-closed { background:#5b5550; color:#efe9e2; }      /* auto: "Closed today" (from data-closed-days) */
+  .badge-soon { background:#8a6d1f; color:#fff; }            /* auto: "Opens HH:MM" today (from data-open-from) */
+  .card-meta { display: flex; gap: 12px; align-items: center; margin-bottom: 10px; }
+  .card-stars { font-size: 11px; font-weight: 500; color: var(--gold); letter-spacing: 0.02em; }
+  .card-reviews { font-size: 11px; color: var(--muted); font-weight: 300; }
+  .card-note { font-size: 12px; color: var(--muted); font-weight: 300; line-height: 1.5; border-top: 1px solid var(--border); padding-top: 10px; margin-top: 2px; }
+  .card-actions { display: flex; margin-top: auto; border-top: 1px solid var(--border); }
+  .card-action { flex: 1; text-align: center; padding: 9px 8px; font-size: 11px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); text-decoration: none; transition: background 0.15s, color 0.15s; }
+  .card-action + .card-action { border-left: 1px solid var(--border); }
+  .card-action:hover { background: var(--cream); color: var(--ink); }
+
+  /* ── STANDOUT CARD ───────────────────────────────────────────── */
+  /* Add class="card standout" for top picks */
+  .card.standout { background: var(--ink); color: var(--paper); }
+  .card.standout .card-name { color: var(--paper); }
+  .card.standout .card-reviews { color: rgba(245,240,232,0.5); }
+  .card.standout .card-stars { color: var(--gold); }
+  .card.standout .card-note { color: rgba(245,240,232,0.6); border-color: rgba(255,255,255,0.12); }
+  .card.standout .card-body:hover { background: #2a2420; }
+  .card.standout .badge-price-1 { background: rgba(46,125,50,0.3); color: #a5d6a7; }
+  .card.standout .badge-price-2 { background: rgba(230,81,0,0.3); color: #ffcc80; }
+  .card.standout .badge-flag { background: rgba(255,255,255,0.15); color: var(--paper); }
+  .card.standout .badge-closed { background: rgba(255,255,255,0.18); color: var(--paper); }
+  .card.standout .badge-soon { background: rgba(230,180,40,0.3); color:#ffe6a3; }
+  .card.standout .card-body::after { color: rgba(245,240,232,0.4); }
+  .card.standout .card-actions { border-color: rgba(255,255,255,0.12); }
+  .card.standout .card-action { color: rgba(245,240,232,0.55); }
+  .card.standout .card-action + .card-action { border-color: rgba(255,255,255,0.12); }
+  .card.standout .card-action:hover { background: #2a2420; color: var(--paper); }
+
+  /* ── DETOUR SECTION ──────────────────────────────────────────── */
+  /* Add class="section detour" for off-route stops */
+  .section.detour .card.standout { background: var(--detour); }
+  .section.detour .card.standout .card-body:hover { background: #0f2e1a; }
+
+  /* ── SHORTLIST ("If you only do three") ──────────────────────── */
+  /* Optional dark box at the top of a section listing the 1–3 must-hits. Each item is a tappable Maps link. */
+  .toppick { margin: 0 0 6px; padding: 16px 18px; background: var(--ink); border-radius: 3px; }
+  .toppick-label { font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--gold); font-weight: 600; margin-bottom: 12px; }
+  .toppick-list { display: flex; flex-direction: column; gap: 9px; }
+  .toppick-item { display: block; text-decoration: none; color: var(--paper); line-height: 1.35; }
+  .toppick-item .tp-name { font-family: 'Playfair Display', serif; font-weight: 700; font-size: 15px; }
+  .toppick-item .tp-name::after { content: ' ↗'; font-size: 10px; color: rgba(245,240,232,0.4); }
+  .toppick-item .tp-why { display: block; font-size: 12px; color: rgba(245,240,232,0.6); font-weight: 300; }
+  .toppick-item:hover .tp-name { color: var(--gold); }
+
+  /* ── ESSENTIALS ROW (compact category strip) ─────────────────── */
+  /* For non-dinner lists: gelato/coffee/aperitivo/picnic ("Beyond Dinner") or hut lunches ("On the Mountain"). */
+  /* Each row is a tappable <a> to a Maps place_id; ess-tag is a short left label (category or zone). */
+  .essentials { background: var(--paper); }
+  .ess-row { display: flex; align-items: baseline; gap: 12px; padding: 13px 22px; border-bottom: 1px solid var(--border); text-decoration: none; color: inherit; transition: background 0.15s; }
+  .ess-row:last-child { border-bottom: none; }
+  .ess-row:hover { background: var(--cream); }
+  .ess-tag { flex-shrink: 0; width: 82px; font-size: 9px; font-weight: 600; letter-spacing: 0.11em; text-transform: uppercase; color: var(--gold); padding-top: 4px; }
+  .ess-content { flex: 1; }
+  .ess-name { font-family: 'Playfair Display', serif; font-size: 15px; font-weight: 700; line-height: 1.25; }
+  .ess-name::after { content: ' ↗'; font-size: 10px; color: var(--muted); opacity: 0; transition: opacity 0.15s; }
+  .ess-row:hover .ess-name::after { opacity: 1; }
+  .ess-why { font-size: 12px; color: var(--muted); font-weight: 300; line-height: 1.45; margin-top: 3px; }
+
+  /* ── BEFORE-YOU-GO INTRO BOX ─────────────────────────────────── */
+  /* Optional cream box at the top of <main>: practical trip notes (reservations, hours, cash, transit). */
+  .intro-box { background: var(--cream); border-left: 3px solid var(--gold); border-radius: 3px; padding: 18px 22px; margin-top: 28px; }
+  .intro-title { font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--gold); font-weight: 600; margin-bottom: 11px; }
+  .intro-list { list-style: none; display: flex; flex-direction: column; gap: 7px; }
+  .intro-list li { font-size: 13px; color: var(--ink); line-height: 1.5; padding-left: 16px; position: relative; }
+  .intro-list li::before { content: '›'; position: absolute; left: 2px; color: var(--gold); font-weight: 700; }
+  .intro-list strong { font-weight: 500; }
+
+  /* ── FOOTER ──────────────────────────────────────────────────── */
+  .footer { background: var(--ink); color: var(--paper); padding: 40px; margin-top: 80px; }
+  .footer-inner { max-width: 900px; margin: 0 auto; }
+  .footer-title { font-family: 'Playfair Display', serif; font-size: 14px; font-weight: 700; margin-bottom: 16px; color: var(--gold); }
+  .legend { display: flex; gap: 32px; flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 8px; font-size: 12px; color: rgba(245,240,232,0.7); }
+  .footer-note { margin-top: 24px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.1); font-size: 11px; color: rgba(245,240,232,0.35); line-height: 1.6; }
+
+  @media (max-width: 600px) {
+    .header, .criteria-bar, .main, .footer { padding-left: 24px; padding-right: 24px; }
+    .header-meta { gap: 20px; }
+    .grid { grid-template-columns: 1fr; }
+    .section-note { display: none; }
+    .section-map { height: 140px; }
+  }
+
+  /* ── FILTER BAR (auto-builds area buttons from [data-area]; hides if 1 area) ── */
+  .filterbar{position:sticky;top:0;z-index:50;background:var(--paper);border-bottom:1px solid var(--border);transition:transform .25s ease;}
+  .filterbar.fb-hidden{transform:translateY(-110%);}
+  .fb-inner{max-width:900px;margin:0 auto;padding:9px 16px;display:flex;flex-direction:column;gap:7px;}
+  .fb-row{display:flex;gap:7px;align-items:center;flex-wrap:wrap;}
+  .fb-btn{font-size:12px;font-weight:600;letter-spacing:.03em;padding:6px 12px;border-radius:3px;border:1px solid var(--border);background:transparent;color:var(--ink);cursor:pointer;-webkit-tap-highlight-color:transparent;line-height:1;}
+  .fb-btn:hover{border-color:var(--ink);}
+  .fb-btn.active{background:var(--red);border-color:var(--red);color:#fff;}
+  .fb-count{margin-left:auto;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);white-space:nowrap;}
+</style>
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#c0392b">
+</head>
+<body>
+
+<header class="header">
+  <div class="header-inner">
+    <div class="header-tag">Maya &amp; Salo — June–July 2026</div>
+    <h1>Where to<br><em>Eat</em> in Peru</h1>
+    <div class="header-sub">Lima · Cusco · Paracas — 12 days, Jun 30 – Jul 11 · Tap any card to open in Google Maps</div>
+    <div class="header-meta">
+      <div class="meta-item"><span class="meta-label">Cities</span><span class="meta-val">3</span></div>
+      <div class="meta-item"><span class="meta-label">Min. Reviews</span><span class="meta-val">500</span></div>
+      <div class="meta-item"><span class="meta-label">Min. Rating</span><span class="meta-val">4.0★</span></div>
+      <div class="meta-item"><span class="meta-label">Max. per person</span><span class="meta-val">$100 CAD</span></div>
+    </div>
+  </div>
+</header>
+
+<div class="criteria-bar">
+  <div class="criteria-inner">
+    <div class="crit"><div class="crit-dot"></div>$ = under ~$20 CAD · $$ = $20–100 CAD</div>
+    <div class="crit"><div class="crit-dot"></div>Dark card = standout pick</div>
+    <div class="crit"><div class="crit-dot"></div>⚑ = splurge / verify hours</div>
+    <div class="crit"><div class="crit-dot"></div>⚠ in a note = red-meat flag for Maya · sorted by stars</div>
+  </div>
+</div>
+
+<main class="main">
+
+<div id="filterbar" class="filterbar">
+  <div class="fb-inner">
+    <div class="fb-row" id="fbCities"></div>
+    <div class="fb-row" id="fbCuisines"></div>
+    <div class="fb-row">
+      <button class="fb-btn fb-price" data-price="1">$</button>
+      <button class="fb-btn fb-price" data-price="2">$$</button>
+      <button class="fb-btn fb-healthy" data-healthy="1">🌿 Healthy</button>
+      <span class="fb-count" id="fbCount"></span>
+    </div>
+  </div>
+</div>
+
+<div class="intro-box">
+    <div class="intro-title">Before you go — Maya &amp; Salo</div>
+    <ul class="intro-list">
+      <li><strong>Book the big ones now.</strong> Lima fine-dining and Cusco's top plaza spots fill fast. The Splurge tier (Central, Maido, Kjolle) books <strong>6–10 weeks out</strong> — for a Jun 30 arrival, try immediately or treat as a maybe.</li>
+      <li><strong>Your dates dodge most closures.</strong> Lima falls on Wed–Sat, so the Sun/Mon-closed spots (Central, Maido, Kjolle, Awicha, Nuestro) are all open while you're there. In Cusco, <strong>Parada Vegana is closed Sun (Jul 5)</strong>. Closed-today badges update live on each card.</li>
+      <li><strong>Altitude in Cusco (~3,400m).</strong> Eat light your first day and go easy on alcohol; most spots serve coca or muña tea for soroche.</li>
+      <li><strong>Maya — no red meat.</strong> Trout (trucha), chicken, and all the seafood/ceviche spots are safe, plus the 🌿 veg-forward picks (filter "Healthy"). <strong>Cuy and alpaca are red meat</strong> — flagged ⚠ in notes.</li>
+      <li><strong>Paracas is a small fishing town.</strong> Stick to the higher-rated rooms below for seafood freshness; a couple of waterfront spots have a shaky reputation.</li>
+      <li><strong>Everything is tappable</strong> &rarr; opens in Google Maps, with Directions and Call on each card.</li>
+    </ul>
+  </div>
+
+  <div class="intro-box">
+    <div class="intro-title">⚠ Allergen note — please read</div>
+    <ul class="intro-list">
+      <li><strong>No allergy profile on file for Maya or Salo.</strong> If either has a <strong>nut or soy</strong> allergy, the <strong>Nikkei</strong> and <strong>Chifa</strong> picks are soy-heavy, and some criollo dishes use peanut (e.g. Pukasoncco's peanut chicken in Paracas). Confirm preparation with each restaurant before ordering.</li>
+    </ul>
+  </div>
+
+<section class="section" data-area="lima">
+  <div class="section-header">
+    <span class="section-day">Days 1–3 &amp; 12 · Jul 1–3, Jul 11</span>
+    <h2 class="section-title">Lima</h2>
+    <span class="section-note">Stops 1 &amp; 4 · Miraflores · Barranco · San Isidro</span>
+  </div>
+  <div class="section-map" id="map-lima"></div>
+  <div class="sub-label"><span class="sub-label-main">Ceviche & Seafood</span><span class="sub-label-note">Miraflores & Barranco · ceviche, tiradito, leche de tigre</span></div>
+  <div class="grid">
+    <div class="card standout" data-price="1" data-healthy="0" data-cuisine="seafood">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Ceviche%20House&query_place_id=ChIJb9Y9MgDJBZERcyHmk5iL8C0" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Ceviche House</div>
+          <div class="card-badges"><span class="badge badge-price-1">$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.9</span>
+          <span class="card-reviews">691 reviews</span>
+        </div>
+        <div class="card-note">Tiny family-run spot — spicy mixed ceviche, fried-seafood platter, jalea. Fresh, friendly. Maya &amp; Salo ✓</div>
+      </a>
+      <div class="card-actions"><a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Ceviche%20House&destination_place_id=ChIJb9Y9MgDJBZERcyHmk5iL8C0" target="_blank" rel="noopener">Directions</a><a class="card-action" href="tel:+51960728974">Call</a></div>
+    </div>
+    <div class="card" data-price="2" data-healthy="0" data-cuisine="seafood">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Punto%20Azul&query_place_id=ChIJY7V5mR7IBZERZyY5uRFw180" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Punto Azul</div>
+          <div class="card-badges"><span class="badge badge-price-2">$$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.6</span>
+          <span class="card-reviews">12,470 reviews</span>
+        </div>
+        <div class="card-note">Local-packed Miraflores institution — ceviche de pescado, grilled octopus, pescado a lo macho. Big portions; lunch wait. ✓</div>
+      </a>
+      <div class="card-actions"><a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Punto%20Azul&destination_place_id=ChIJY7V5mR7IBZERZyY5uRFw180" target="_blank" rel="noopener">Directions</a><a class="card-action" href="tel:+5114458078">Call</a></div>
+    </div>
+    <div class="card" data-price="2" data-healthy="0" data-cuisine="seafood">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Barra%20Maretazo&query_place_id=ChIJ5XbJYRnIBZERs61Io2CFoFk" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Barra Maretazo</div>
+          <div class="card-badges"><span class="badge badge-price-2">$$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.6</span>
+          <span class="card-reviews">4,896 reviews</span>
+        </div>
+        <div class="card-note">Build-your-own ceviche 'barra' — pick two + a drink. Causa and leche de tigre standouts; fast, great value. ✓</div>
+      </a>
+      <div class="card-actions"><a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Barra%20Maretazo&destination_place_id=ChIJ5XbJYRnIBZERs61Io2CFoFk" target="_blank" rel="noopener">Directions</a><a class="card-action" href="tel:+51933037574">Call</a></div>
+    </div>
+    <div class="card" data-price="1" data-healthy="0" data-cuisine="seafood">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Cevicher%C3%ADa%20Miramar&query_place_id=ChIJweyB6BjIBZERxpwmcfC40TA" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Cevichería Miramar</div>
+          <div class="card-badges"><span class="badge badge-price-1">$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.3</span>
+          <span class="card-reviews">1,564 reviews</span>
+        </div>
+        <div class="card-note">No-frills locals' cevichería — trio marino (ceviche + seafood rice + calamari). Cheap, fast, fresh. ✓</div>
+      </a>
+      <div class="card-actions"><a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Cevicher%C3%ADa%20Miramar&destination_place_id=ChIJweyB6BjIBZERxpwmcfC40TA" target="_blank" rel="noopener">Directions</a><a class="card-action" href="tel:+5112413507">Call</a></div>
+    </div>
+  </div>
+  <div class="sub-label"><span class="sub-label-main">Criollo &amp; Traditional</span><span class="sub-label-note">Limeño classics — causa, lomo saltado, anticuchos</span></div>
+  <div class="grid">
+    <div class="card standout" data-price="2" data-healthy="0" data-cuisine="peruvian">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Chicho%20Cocina%20de%20Ra%C3%ADz&query_place_id=ChIJJTOiAPjJBZER5twP81-nl_A" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Chicho Cocina de Raíz</div>
+          <div class="card-badges"><span class="badge badge-price-2">$$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.8</span>
+          <span class="card-reviews">2,226 reviews</span>
+        </div>
+        <div class="card-note">Modern 'cocina de raíz' — celebrated duck rice, tiradito ahumado, ají amarillo cream. Polished. ✓</div>
+      </a>
+      <div class="card-actions"><a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Chicho%20Cocina%20de%20Ra%C3%ADz&destination_place_id=ChIJJTOiAPjJBZER5twP81-nl_A" target="_blank" rel="noopener">Directions</a><a class="card-action" href="tel:+51968315924">Call</a></div>
+    </div>
+    <div class="card" data-price="2" data-healthy="0" data-cuisine="peruvian">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Kauza&query_place_id=ChIJNSYHP0fJBZERmK4pKkxak_w" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Kauza</div>
+          <div class="card-badges"><span class="badge badge-price-2">$$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.7</span>
+          <span class="card-reviews">2,496 reviews</span>
+        </div>
+        <div class="card-note">Causa specialist (causa acevichada, causa con lomo) — explicitly carnivore + veg friendly, rooftop seating. ✓</div>
+      </a>
+      <div class="card-actions"><a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Kauza&destination_place_id=ChIJNSYHP0fJBZERmK4pKkxak_w" target="_blank" rel="noopener">Directions</a><a class="card-action" href="tel:+51981029866">Call</a></div>
+    </div>
+    <div class="card" data-price="2" data-healthy="0" data-cuisine="peruvian">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Isolina&query_place_id=ChIJGR_e8O23BZERtIDRCkVeiTg" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Isolina</div>
+          <div class="card-badges"><span class="badge badge-price-2">$$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.6</span>
+          <span class="card-reviews">7,698 reviews</span>
+        </div>
+        <div class="card-note">Big-portion Barranco criollo, dishes meant to share. ⚠ Maya: signature lomo saltado is beef — but ceviche, chicharrón de pulpo, chaufa on the menu.</div>
+      </a>
+      <div class="card-actions"><a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Isolina&destination_place_id=ChIJGR_e8O23BZERtIDRCkVeiTg" target="_blank" rel="noopener">Directions</a><a class="card-action" href="tel:+51943833031">Call</a></div>
+    </div>
+    <div class="card" data-price="2" data-healthy="0" data-cuisine="grill">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Panchita&query_place_id=ChIJRY1ylxfIBZERqGq4nJw313s" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Panchita</div>
+          <div class="card-badges"><span class="badge badge-price-2">$$</span><span class="badge badge-flag">⚑</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.6</span>
+          <span class="card-reviews">13,887 reviews</span>
+        </div>
+        <div class="card-note">Gastón Acurio's grill — anticuchos, suckling pig, picarones. ⚠ Maya: meat/grill-heavy; ceviche + chicken available. Pricier; reserve.</div>
+      </a>
+      <div class="card-actions"><a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Panchita&destination_place_id=ChIJRY1ylxfIBZERqGq4nJw313s" target="_blank" rel="noopener">Directions</a><a class="card-action" href="tel:+5112425957">Call</a></div>
+    </div>
+  </div>
+  <div class="sub-label"><span class="sub-label-main">Nikkei</span><span class="sub-label-note">Peru's signature Japanese-Peruvian — soy-heavy, see allergen note</span></div>
+  <div class="grid">
+    <div class="card standout" data-price="2" data-healthy="0" data-cuisine="nikkei">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=FAN%20neo%20nikkei&query_place_id=ChIJ57B7WBnJBZERxlF3GSmiifY" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">FAN neo nikkei</div>
+          <div class="card-badges"><span class="badge badge-price-2">$$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.8</span>
+          <span class="card-reviews">833 reviews</span>
+        </div>
+        <div class="card-note">Neo-Nikkei doing big flavour at fair prices — scallop-truffle nigiri, tiraditos, acevichado maki. ✓</div>
+      </a>
+      <div class="card-actions"><a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=FAN%20neo%20nikkei&destination_place_id=ChIJ57B7WBnJBZERxlF3GSmiifY" target="_blank" rel="noopener">Directions</a><a class="card-action" href="tel:+51933263005">Call</a></div>
+    </div>
+    <div class="card" data-price="2" data-healthy="0" data-cuisine="nikkei">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Shizen&query_place_id=ChIJueDt-eLIBZERCgKBb0cqhIo" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Shizen</div>
+          <div class="card-badges"><span class="badge badge-price-2">$$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.7</span>
+          <span class="card-reviews">1,058 reviews</span>
+        </div>
+        <div class="card-note">Refined San Isidro omakase — sashimi, octopus-kimchi nigiri, camu-camu cocktails. Sun lunch only. ✓</div>
+      </a>
+      <div class="card-actions"><a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Shizen&destination_place_id=ChIJueDt-eLIBZERCgKBb0cqhIo" target="_blank" rel="noopener">Directions</a><a class="card-action" href="tel:+51926855394">Call</a></div>
+    </div>
+    <div class="card" data-price="2" data-healthy="0" data-cuisine="nikkei">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Osaka&query_place_id=ChIJOWDX70DIBZEROagYMzqVsEk" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Osaka</div>
+          <div class="card-badges"><span class="badge badge-price-2">$$</span><span class="badge badge-flag">⚑</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.7</span>
+          <span class="card-reviews">4,761 reviews</span>
+        </div>
+        <div class="card-note">Lima's flagship Nikkei — wasabi ceviche, tuna-tartare roll, KERO speakeasy bar. ⚑ upper end (~$90–130/pp with drinks). ✓</div>
+      </a>
+      <div class="card-actions"><a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Osaka&destination_place_id=ChIJOWDX70DIBZEROagYMzqVsEk" target="_blank" rel="noopener">Directions</a><a class="card-action" href="tel:+51958798721">Call</a></div>
+    </div>
+  </div>
+  <div class="sub-label"><span class="sub-label-main">Chifa</span><span class="sub-label-note">Chinese-Peruvian — soy-heavy, see allergen note</span></div>
+  <div class="grid">
+    <div class="card" data-price="2" data-healthy="0" data-cuisine="chifa">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Shi-Nua&query_place_id=ChIJl4estc_JBZERYmJl6DB_glY" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Shi-Nua</div>
+          <div class="card-badges"><span class="badge badge-price-2">$$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.4</span>
+          <span class="card-reviews">1,672 reviews</span>
+        </div>
+        <div class="card-note">Upscale Chifa — exceptional duck, chaufa, wagyu shu-mai, Mongolian beef. Cherry-blossom rooms. ✓</div>
+      </a>
+      <div class="card-actions"><a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Shi-Nua&destination_place_id=ChIJl4estc_JBZERYmJl6DB_glY" target="_blank" rel="noopener">Directions</a><a class="card-action" href="tel:+51981252156">Call</a></div>
+    </div>
+  </div>
+  <div class="sub-label"><span class="sub-label-main">Chef's-Table Gems</span><span class="sub-label-note">fewer reviews, locals rave — book ahead</span></div>
+  <div class="grid">
+    <div class="card" data-price="2" data-healthy="0" data-cuisine="peruvian" data-closed-days="0">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Awicha&query_place_id=ChIJV0IFLADJBZER5z0_OLLJzhs" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Awicha</div>
+          <div class="card-badges"><span class="badge badge-price-2">$$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.9</span>
+          <span class="card-reviews">335 reviews</span>
+        </div>
+        <div class="card-note">Hidden San Isidro gem — beef-and-scallop tartare, pulpo a la gallega, arroz mar y tierra. Closed Sundays. ✓</div>
+      </a>
+      <div class="card-actions"><a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Awicha&destination_place_id=ChIJV0IFLADJBZER5z0_OLLJzhs" target="_blank" rel="noopener">Directions</a><a class="card-action" href="tel:+51974956646">Call</a></div>
+    </div>
+    <div class="card" data-price="2" data-healthy="0" data-cuisine="peruvian" data-closed-days="1">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Nuestro%20Bistro&query_place_id=ChIJbYWvNb63BZER3Mb9WXTrobo" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Nuestro Bistro</div>
+          <div class="card-badges"><span class="badge badge-price-2">$$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.8</span>
+          <span class="card-reviews">200 reviews</span>
+        </div>
+        <div class="card-note">Intimate Barranco favourite — tiradito apaltado, set tasting menu with wine pairing. Closed Mondays. ✓</div>
+      </a>
+      <div class="card-actions"><a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Nuestro%20Bistro&destination_place_id=ChIJbYWvNb63BZER3Mb9WXTrobo" target="_blank" rel="noopener">Directions</a><a class="card-action" href="tel:+51948721346">Call</a></div>
+    </div>
+  </div>
+  <div class="sub-label"><span class="sub-label-main">Splurge</span><span class="sub-label-note">over budget · world-class · book weeks ahead</span></div>
+  <div class="grid">
+    <div class="card" data-price="3" data-healthy="0" data-cuisine="splurge" data-closed-days="0">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Maido&query_place_id=ChIJObzkJx_IBZERAQaFKNwiTws" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Maido</div>
+          <div class="card-badges"><span class="badge badge-flag">⚑</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.7</span>
+          <span class="card-reviews">5,016 reviews</span>
+        </div>
+        <div class="card-note">World's-50-Best Nikkei (Mitsuharu Tsumura) — 12-course tasting, famed asado de tira. ⚑ ~$250+ CAD/pp · book 6–10 wks ahead · closed Sun.</div>
+      </a>
+      <div class="card-actions"><a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Maido&destination_place_id=ChIJObzkJx_IBZERAQaFKNwiTws" target="_blank" rel="noopener">Directions</a><a class="card-action" href="tel:+5113135100">Call</a></div>
+    </div>
+    <div class="card" data-price="3" data-healthy="0" data-cuisine="splurge" data-closed-days="0">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Central&query_place_id=ChIJ01sth-G3BZERHLHau6WPXV8" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Central</div>
+          <div class="card-badges"><span class="badge badge-flag">⚑</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.6</span>
+          <span class="card-reviews">3,469 reviews</span>
+        </div>
+        <div class="card-note">Virgilio Martínez's ecosystem tasting menu — a journey by altitude (Barranco). ⚑ ~$260+ CAD/pp · book 8+ wks ahead · closed Sun.</div>
+      </a>
+      <div class="card-actions"><a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Central&destination_place_id=ChIJ01sth-G3BZERHLHau6WPXV8" target="_blank" rel="noopener">Directions</a><a class="card-action" href="tel:+5112428515">Call</a></div>
+    </div>
+    <div class="card" data-price="3" data-healthy="0" data-cuisine="splurge" data-closed-days="0,1">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Kjolle&query_place_id=ChIJr1L1USC3BZEREp0Z1sp3AeU" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Kjolle</div>
+          <div class="card-badges"><span class="badge badge-flag">⚑</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.7</span>
+          <span class="card-reviews">1,195 reviews</span>
+        </div>
+        <div class="card-note">Central's à-la-carte sister — Peruvian-produce focus, standout vegan tasting menu, easier to book. ⚑ ~$120–180/pp · closed Sun &amp; Mon.</div>
+      </a>
+      <div class="card-actions"><a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Kjolle&destination_place_id=ChIJr1L1USC3BZEREp0Z1sp3AeU" target="_blank" rel="noopener">Directions</a><a class="card-action" href="tel:+5112428575">Call</a></div>
+    </div>
+    <div class="card" data-price="3" data-healthy="0" data-cuisine="splurge">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Mayta&query_place_id=ChIJqz8RPjbIBZERTyuxNQ8LNHs" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Mayta</div>
+          <div class="card-badges"><span class="badge badge-flag">⚑</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.6</span>
+          <span class="card-reviews">2,595 reviews</span>
+        </div>
+        <div class="card-note">Jaime Pesaque's fine dining, open daily (lunch + dinner) — corn pasta, clams &amp; artichoke. ⚑ closest to budget (~$90–130/pp).</div>
+      </a>
+      <div class="card-actions"><a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Mayta&destination_place_id=ChIJqz8RPjbIBZERTyuxNQ8LNHs" target="_blank" rel="noopener">Directions</a><a class="card-action" href="tel:+51937220734">Call</a></div>
+    </div>
+  </div>
+</section>
+
+<section class="section" data-area="cusco">
+  <div class="section-header">
+    <span class="section-day">Days 4–7 · Jul 4–7</span>
+    <h2 class="section-title">Cusco</h2>
+    <span class="section-note">Stop 2 · ~3,400m · historic centre &amp; San Blas</span>
+  </div>
+  <div class="section-map" id="map-cusco"></div>
+  <div class="sub-label"><span class="sub-label-main">Novoandino &amp; Traditional</span><span class="sub-label-note">Plaza de Armas &amp; San Blas · alpaca, trout (trucha), quinoa</span></div>
+  <div class="grid">
+    <div class="card standout" data-price="2" data-healthy="0" data-cuisine="peruvian">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Ukllay&query_place_id=ChIJC1qwU3zXbZERot7V7m5Sx78" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Ukllay</div>
+          <div class="card-badges"><span class="badge badge-price-2">$$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 5.0</span>
+          <span class="card-reviews">1,419 reviews</span>
+        </div>
+        <div class="card-note">5.0★ traditional rooftop on the plaza — seafood trio, passion-fruit pisco sour, art-plated dishes. Hidden entrance. ✓</div>
+      </a>
+      <div class="card-actions"><a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Ukllay&destination_place_id=ChIJC1qwU3zXbZERot7V7m5Sx78" target="_blank" rel="noopener">Directions</a><a class="card-action" href="tel:+51948720325">Call</a></div>
+    </div>
+    <div class="card standout" data-price="2" data-healthy="0" data-cuisine="peruvian">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=KUSYKAY&query_place_id=ChIJz_s1Ijp_bpER6OqODFRfdq4" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">KUSYKAY</div>
+          <div class="card-badges"><span class="badge badge-price-2">$$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.9</span>
+          <span class="card-reviews">12,143 reviews</span>
+        </div>
+        <div class="card-note">Plaza-side craft-food star — refined novoandino, alpaca loin, fresh ceviche, balcony views. Reserve for dinner. ✓</div>
+      </a>
+      <div class="card-actions"><a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=KUSYKAY&destination_place_id=ChIJz_s1Ijp_bpER6OqODFRfdq4" target="_blank" rel="noopener">Directions</a><a class="card-action" href="tel:+51986367041">Call</a></div>
+    </div>
+    <div class="card" data-price="2" data-healthy="0" data-cuisine="peruvian">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Ofrenda&query_place_id=ChIJx56f7DXXbZERybprmKXVWV8" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Ofrenda</div>
+          <div class="card-badges"><span class="badge badge-price-2">$$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.9</span>
+          <span class="card-reviews">6,045 reviews</span>
+        </div>
+        <div class="card-note">Just off the plaza — beautifully plated Peruvian; alpaca gnocchi, trout, quinoa risotto. They bring altitude tea. ✓</div>
+      </a>
+      <div class="card-actions"><a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Ofrenda&destination_place_id=ChIJx56f7DXXbZERybprmKXVWV8" target="_blank" rel="noopener">Directions</a><a class="card-action" href="tel:+51992499700">Call</a></div>
+    </div>
+    <div class="card" data-price="2" data-healthy="0" data-cuisine="peruvian">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Casa%20Cusque%C3%B1a&query_place_id=ChIJsX9dDtjXbZERIkwuGhZXCPg" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Casa Cusqueña</div>
+          <div class="card-badges"><span class="badge badge-price-2">$$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.9</span>
+          <span class="card-reviews">1,326 reviews</span>
+        </div>
+        <div class="card-note">Second-floor balcony over the old town — strong mains, knockout desserts, warm service. ✓</div>
+      </a>
+      <div class="card-actions"><a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Casa%20Cusque%C3%B1a&destination_place_id=ChIJsX9dDtjXbZERIkwuGhZXCPg" target="_blank" rel="noopener">Directions</a><a class="card-action" href="tel:+51949336551">Call</a></div>
+    </div>
+    <div class="card" data-price="2" data-healthy="0" data-cuisine="peruvian">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Tejas%20y%20Piedras&query_place_id=ChIJi9vdO2nXbZERjxe8nYPTYUI" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Tejas y Piedras</div>
+          <div class="card-badges"><span class="badge badge-price-2">$$</span><span class="badge badge-flag">⚑</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.9</span>
+          <span class="card-reviews">600 reviews</span>
+        </div>
+        <div class="card-note">Courtyard Peruvian off the plaza — trout-ceviche seafood rice, gnocchi. ⚑ confirm it's open (a recent review flagged temp-closed). ⚠ Maya: alpaca on menu, plenty else.</div>
+      </a>
+      <div class="card-actions"><a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Tejas%20y%20Piedras&destination_place_id=ChIJi9vdO2nXbZERjxe8nYPTYUI" target="_blank" rel="noopener">Directions</a><a class="card-action" href="tel:+51910690632">Call</a></div>
+    </div>
+    <div class="card" data-price="2" data-healthy="0" data-cuisine="peruvian">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Piedra%20%26amp%3B%20Sal&query_place_id=ChIJBwPlkwzWbZER7ZZV5MHpiD8" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Piedra &amp; Sal</div>
+          <div class="card-badges"><span class="badge badge-price-2">$$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.9</span>
+          <span class="card-reviews">581 reviews</span>
+        </div>
+        <div class="card-note">Candlelit courtyard inside a San Blas hotel — traditional dishes, great cocktails, fireplace. ✓</div>
+      </a>
+      <div class="card-actions"><a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Piedra%20%26amp%3B%20Sal&destination_place_id=ChIJBwPlkwzWbZER7ZZV5MHpiD8" target="_blank" rel="noopener">Directions</a><a class="card-action" href="tel:+51927035659">Call</a></div>
+    </div>
+    <div class="card" data-price="2" data-healthy="0" data-cuisine="peruvian">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=New%20Garden&query_place_id=ChIJhYyQDQ3XbZER_Ov-PJixR3A" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">New Garden</div>
+          <div class="card-badges"><span class="badge badge-price-2">$$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.9</span>
+          <span class="card-reviews">487 reviews</span>
+        </div>
+        <div class="card-note">Quietly excellent — standout Peruvian potatoes, tomato soup, ceviche, ravioli; many veg options. Host-led. ✓</div>
+      </a>
+      <div class="card-actions"><a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=New%20Garden&destination_place_id=ChIJhYyQDQ3XbZER_Ov-PJixR3A" target="_blank" rel="noopener">Directions</a><a class="card-action" href="tel:+51962601666">Call</a></div>
+    </div>
+    <div class="card" data-price="2" data-healthy="0" data-cuisine="peruvian">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Huaraca%20Grill&query_place_id=ChIJj5oRcM7XbZERMrwDx5SXtNo" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Huaraca Grill</div>
+          <div class="card-badges"><span class="badge badge-price-2">$$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.8</span>
+          <span class="card-reviews">1,234 reviews</span>
+        </div>
+        <div class="card-note">Balcony tables over Plaza de Armas — trout ceviche (river 'trucha'), skewers. Great views, laid-back. ✓</div>
+      </a>
+      <div class="card-actions"><a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Huaraca%20Grill&destination_place_id=ChIJj5oRcM7XbZERMrwDx5SXtNo" target="_blank" rel="noopener">Directions</a><a class="card-action" href="tel:+51913333172">Call</a></div>
+    </div>
+    <div class="card" data-price="2" data-healthy="0" data-cuisine="peruvian">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Campo%20by%20Morena&query_place_id=ChIJJQfT3szXbZERxi0b5J2gjMs" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Campo by Morena</div>
+          <div class="card-badges"><span class="badge badge-price-2">$$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.8</span>
+          <span class="card-reviews">493 reviews</span>
+        </div>
+        <div class="card-note">Morena's sister — suckling-pig tacos, oxtail croquettes, burger. Some rate it above Morena. ✓</div>
+      </a>
+      <div class="card-actions"><a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Campo%20by%20Morena&destination_place_id=ChIJJQfT3szXbZERxi0b5J2gjMs" target="_blank" rel="noopener">Directions</a><a class="card-action" href="tel:+5184213310">Call</a></div>
+    </div>
+    <div class="card" data-price="2" data-healthy="0" data-cuisine="peruvian">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Pachapapa&query_place_id=ChIJ5SmbwgzWbZERIDiHIToCAnY" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Pachapapa</div>
+          <div class="card-badges"><span class="badge badge-price-2">$$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.7</span>
+          <span class="card-reviews">7,132 reviews</span>
+        </div>
+        <div class="card-note">Atmospheric courtyard, full local experience. ⚠ Maya: famous for cuy + alpaca skewers — but stuffed peppers, trout &amp; veg too. Coeliac-aware.</div>
+      </a>
+      <div class="card-actions"><a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Pachapapa&destination_place_id=ChIJ5SmbwgzWbZERIDiHIToCAnY" target="_blank" rel="noopener">Directions</a></div>
+    </div>
+    <div class="card" data-price="2" data-healthy="0" data-cuisine="peruvian">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Morena%20Peruvian%20Kitchen&query_place_id=ChIJy3uWwHPWbZERICgazBw9xPo" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Morena Peruvian Kitchen</div>
+          <div class="card-badges"><span class="badge badge-price-2">$$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.7</span>
+          <span class="card-reviews">3,916 reviews</span>
+        </div>
+        <div class="card-note">Cusco's polished favourite — pulpo al olivo, choclo croquettes, tacos. Reserve a few days out. ✓</div>
+      </a>
+      <div class="card-actions"><a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Morena%20Peruvian%20Kitchen&destination_place_id=ChIJy3uWwHPWbZERICgazBw9xPo" target="_blank" rel="noopener">Directions</a><a class="card-action" href="tel:+51993652202">Call</a></div>
+    </div>
+    <div class="card" data-price="2" data-healthy="0" data-cuisine="peruvian">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=LOCAL%20Restaurante&query_place_id=ChIJOS1o507XbZERabzF13UvMT4" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">LOCAL Restaurante</div>
+          <div class="card-badges"><span class="badge badge-price-2">$$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.7</span>
+          <span class="card-reviews">1,489 reviews</span>
+        </div>
+        <div class="card-note">San Blas bistro/café — empanadas, short ribs, cacio e pepe, good coffee. Veg options; meat available. ✓</div>
+      </a>
+      <div class="card-actions"><a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=LOCAL%20Restaurante&destination_place_id=ChIJOS1o507XbZERabzF13UvMT4" target="_blank" rel="noopener">Directions</a><a class="card-action" href="tel:+51944094434">Call</a></div>
+    </div>
+  </div>
+  <div class="sub-label"><span class="sub-label-main">Veg-Forward &amp; Healthy</span><span class="sub-label-note">great for Maya — vegan, vegetarian, gluten-free marked</span></div>
+  <div class="grid">
+    <div class="card standout" data-price="2" data-healthy="1" data-cuisine="vegetarian">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=El%20Jardin&query_place_id=ChIJF7EkMPDXbZERz0yFHA4wJyg" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">El Jardin</div>
+          <div class="card-badges"><span class="badge badge-price-2">$$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.9</span>
+          <span class="card-reviews">1,172 reviews</span>
+        </div>
+        <div class="card-note">Plaza-side veg/vegan all-day — quinoa bowls, vegetarian lasagna, GF options, breakfast. 4.9★. 🌿 ✓</div>
+      </a>
+      <div class="card-actions"><a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=El%20Jardin&destination_place_id=ChIJF7EkMPDXbZERz0yFHA4wJyg" target="_blank" rel="noopener">Directions</a><a class="card-action" href="tel:+51953727595">Call</a></div>
+    </div>
+    <div class="card" data-price="2" data-healthy="1" data-cuisine="vegetarian">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Organika&query_place_id=ChIJ3cIzTXLWbZERa57T8PDH-5E" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Organika</div>
+          <div class="card-badges"><span class="badge badge-price-2">$$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.8</span>
+          <span class="card-reviews">4,712 reviews</span>
+        </div>
+        <div class="card-note">Farm-to-table, own farm — trout ceviche, gluten-free marked, brick-oven pizza, fettuccine. 🌿 ✓</div>
+      </a>
+      <div class="card-actions"><a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Organika&destination_place_id=ChIJ3cIzTXLWbZERa57T8PDH-5E" target="_blank" rel="noopener">Directions</a><a class="card-action" href="tel:+5184772448">Call</a></div>
+    </div>
+    <div class="card" data-price="2" data-healthy="1" data-cuisine="vegetarian">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Green%20Point&query_place_id=ChIJC0fxkwzWbZERDSw2KFcmX6s" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Green Point</div>
+          <div class="card-badges"><span class="badge badge-price-2">$$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.7</span>
+          <span class="card-reviews">3,576 reviews</span>
+        </div>
+        <div class="card-note">Cusco's top vegan house — lasagna, burrito, tacos, house kombucha; big portions. 🌿 Great for Maya. ✓</div>
+      </a>
+      <div class="card-actions"><a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Green%20Point&destination_place_id=ChIJC0fxkwzWbZERDSw2KFcmX6s" target="_blank" rel="noopener">Directions</a><a class="card-action" href="tel:+51993824045">Call</a></div>
+    </div>
+    <div class="card" data-price="1" data-healthy="1" data-cuisine="vegetarian" data-closed-days="0">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Parada%20Vegana&query_place_id=ChIJ5QYfQ7bXbZER_G4cyJu06J8" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Parada Vegana</div>
+          <div class="card-badges"><span class="badge badge-price-1">$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.7</span>
+          <span class="card-reviews">530 reviews</span>
+        </div>
+        <div class="card-note">Locals' all-vegan favourite — buddha bowls, best juices in town, lemon pie. Closed Sundays. 🌿 ✓</div>
+      </a>
+      <div class="card-actions"><a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Parada%20Vegana&destination_place_id=ChIJ5QYfQ7bXbZER_G4cyJu06J8" target="_blank" rel="noopener">Directions</a><a class="card-action" href="tel:+51958339692">Call</a></div>
+    </div>
+  </div>
+</section>
+
+<section class="section" data-area="paracas">
+  <div class="section-header">
+    <span class="section-day">Days 8–10 · Jul 8–10</span>
+    <h2 class="section-title">Paracas</h2>
+    <span class="section-note">Stop 3 · El Chaco boardwalk · coast &amp; desert</span>
+  </div>
+  <div class="section-map" id="map-paracas"></div>
+  <div class="sub-label"><span class="sub-label-main">Seafood &amp; Local</span><span class="sub-label-note">small town — stick to higher-rated spots for freshness</span></div>
+  <div class="grid">
+    <div class="card" data-price="1" data-healthy="0" data-cuisine="peruvian">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Triple%20C&query_place_id=ChIJF2KO_hxjEJERbL5QKIq2aC4" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Triple C</div>
+          <div class="card-badges"><span class="badge badge-price-1">$</span><span class="badge badge-flag">⚑</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.9</span>
+          <span class="card-reviews">626 reviews</span>
+        </div>
+        <div class="card-note">Venezuelan couple's all-day spot — arepas, burritos, fresh juices; gluten-free friendly. ⚑ hours not listed — call/check ahead. ✓</div>
+      </a>
+      <div class="card-actions"><a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Triple%20C&destination_place_id=ChIJF2KO_hxjEJERbL5QKIq2aC4" target="_blank" rel="noopener">Directions</a></div>
+    </div>
+    <div class="card" data-price="2" data-healthy="0" data-cuisine="peruvian" data-open-from="16:00">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Valhalla%20Resto-Bar&query_place_id=ChIJ8SwK3BtjEJER4TgKKlxh170" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Valhalla Resto-Bar</div>
+          <div class="card-badges"><span class="badge badge-price-2">$$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.8</span>
+          <span class="card-reviews">452 reviews</span>
+        </div>
+        <div class="card-note">Family-run resto-bar, best quality in town — shrimp pasta, soups, chaufa. Opens 4pm. (Top-rated; just under our review floor.) ✓</div>
+      </a>
+      <div class="card-actions"><a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Valhalla%20Resto-Bar&destination_place_id=ChIJ8SwK3BtjEJER4TgKKlxh170" target="_blank" rel="noopener">Directions</a><a class="card-action" href="tel:+51932914689">Call</a></div>
+    </div>
+    <div class="card" data-price="2" data-healthy="0" data-cuisine="seafood">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Vista%20Paracas&query_place_id=ChIJNSoqQ3NjEJERYOOu37fs0mo" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Vista Paracas</div>
+          <div class="card-badges"><span class="badge badge-price-2">$$</span><span class="badge badge-flag">⚑</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.8</span>
+          <span class="card-reviews">131 reviews</span>
+        </div>
+        <div class="card-note">Quiet yacht-club spot with a view — arroz con mariscos, pulpo al olivo, fresh maracuyá juice. Small but well-rated. ⚑ low review count. ✓</div>
+      </a>
+      <div class="card-actions"><a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Vista%20Paracas&destination_place_id=ChIJNSoqQ3NjEJERYOOu37fs0mo" target="_blank" rel="noopener">Directions</a><a class="card-action" href="tel:+51906367472">Call</a></div>
+    </div>
+    <div class="card standout" data-price="2" data-healthy="0" data-cuisine="seafood">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Pukasoncco&query_place_id=ChIJaSafbj1jEJERtAz3rLw22Zc" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Pukasoncco</div>
+          <div class="card-badges"><span class="badge badge-price-2">$$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.7</span>
+          <span class="card-reviews">678 reviews</span>
+        </div>
+        <div class="card-note">Top El Chaco pick — parihuela, vegetable ceviche, vegetarian chaufa, exceptional pisco sour. ⚠ peanut chicken on menu (see allergen note). ✓</div>
+      </a>
+      <div class="card-actions"><a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Pukasoncco&destination_place_id=ChIJaSafbj1jEJERtAz3rLw22Zc" target="_blank" rel="noopener">Directions</a><a class="card-action" href="tel:+51934600708">Call</a></div>
+    </div>
+    <div class="card" data-price="1" data-healthy="0" data-cuisine="seafood">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Milla%20Cero&query_place_id=ChIJQ98bHWxjEJER725wRasw-ps" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Milla Cero</div>
+          <div class="card-badges"><span class="badge badge-price-1">$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.5</span>
+          <span class="card-reviews">482 reviews</span>
+        </div>
+        <div class="card-note">Skip the wharf, come here — fresh tiradito, causa mixta, arroz de mariscos at fair prices; vegan options. ✓</div>
+      </a>
+      <div class="card-actions"><a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Milla%20Cero&destination_place_id=ChIJQ98bHWxjEJER725wRasw-ps" target="_blank" rel="noopener">Directions</a><a class="card-action" href="tel:+51970472395">Call</a></div>
+    </div>
+    <div class="card" data-price="2" data-healthy="0" data-cuisine="seafood">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Reserva&query_place_id=ChIJsxCUUU1jEJERwhtCcyeMsgI" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Reserva</div>
+          <div class="card-badges"><span class="badge badge-price-2">$$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.4</span>
+          <span class="card-reviews">1,148 reviews</span>
+        </div>
+        <div class="card-note">Higher-end option by the hotel zone (KM 18.5) — corvina milanese, pizza with imported flour. Book for dinner. ✓</div>
+      </a>
+      <div class="card-actions"><a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Reserva&destination_place_id=ChIJsxCUUU1jEJERwhtCcyeMsgI" target="_blank" rel="noopener">Directions</a><a class="card-action" href="tel:+51977959615">Call</a></div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="footer">
+  <div class="footer-inner">
+    <div class="footer-title">Legend</div>
+    <div class="legend">
+      <div class="legend-item"><span class="badge badge-price-1" style="background:rgba(46,125,50,0.3);color:#a5d6a7;">$</span> Under ~$20 CAD/person</div>
+      <div class="legend-item"><span class="badge badge-price-2" style="background:rgba(230,81,0,0.3);color:#ffcc80;">$$</span> $20–100 CAD/person</div>
+      <div class="legend-item"><span class="badge badge-flag">⚑</span> Verify price or hours</div>
+      <div class="legend-item"><span style="width:20px;height:14px;background:#1a1614;display:inline-block;border-radius:2px;"></span> Standout pick</div>
+      <div class="legend-item"><span style="width:20px;height:14px;background:#1a4a2e;display:inline-block;border-radius:2px;"></span> Detour section</div>
+    </div>
+    <div class="footer-note">
+      All establishments meet: 500+ Google Maps reviews · 4.0+ stars · Under $100 CAD/person (Paracas review floor relaxed to 400+; Splurge tier is over budget). Clicking a card opens Google Maps. Sorted by star rating within each group, then by review count as tiebreaker. Map tiles © OpenStreetMap contributors.
+    </div>
+  </div>
+</footer>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  var LIMA_PTS=[[-12.1184018,-77.0283885,'Ceviche House'],[-12.1263861,-77.0281278,'Punto Azul'],[-12.1229096,-77.0277089,'Barra Maretazo'],[-12.1236994,-77.0315691,'Cevichería Miramar'],[-12.1128649,-77.037108,'Chicho Cocina de Raíz'],[-12.1235919,-77.028598,'Kauza'],[-12.1476336,-77.0223205,'Isolina'],[-12.1177544,-77.0312137,'Panchita'],[-12.1096559,-77.0315061,'FAN neo nikkei'],[-12.1061546,-77.0370279,'Shizen'],[-12.105913,-77.0387962,'Osaka'],[-12.0972223,-77.0372772,'Shi-Nua'],[-12.0958815,-77.0351445,'Awicha'],[-12.1459809,-77.0220457,'Nuestro Bistro'],[-12.1254202,-77.0305744,'Maido'],[-12.1526483,-77.0224579,'Central'],[-12.1526899,-77.0224626,'Kjolle'],[-12.1098839,-77.0492013,'Mayta']];
+  var CUSCO_PTS=[[-13.5163425,-71.9794752,'Ukllay'],[-13.5165588,-71.9772618,'KUSYKAY'],[-13.5159947,-71.9802338,'Ofrenda'],[-13.5169131,-71.977569,'Casa Cusqueña'],[-13.5155316,-71.9789872,'Tejas y Piedras'],[-13.5158886,-71.973581,'Piedra & Sal'],[-13.5136819,-71.9779738,'New Garden'],[-13.5173165,-71.9788841,'Huaraca Grill'],[-13.5163019,-71.9798094,'Campo by Morena'],[-13.5152229,-71.9746542,'Pachapapa'],[-13.5158391,-71.9789673,'Morena Peruvian Kitchen'],[-13.5155612,-71.9755454,'LOCAL Restaurante'],[-13.516024,-71.9792437,'El Jardin'],[-13.5152157,-71.9784656,'Organika'],[-13.5158272,-71.9738935,'Green Point'],[-13.5212413,-71.9769974,'Parada Vegana']];
+  var PARACAS_PTS=[[-13.8332837,-76.2483968,'Triple C'],[-13.8334839,-76.248653,'Valhalla Resto-Bar'],[-13.8346446,-76.2516619,'Vista Paracas'],[-13.8363748,-76.2469444,'Pukasoncco'],[-13.8330823,-76.2483159,'Milla Cero'],[-13.8095404,-76.2422053,'Reserva']];
+  function cityMap(id, pts){
+    var el=document.getElementById(id); if(!el||!pts.length) return;
+    var m=L.map(id,{scrollWheelZoom:false,dragging:true,touchZoom:true,doubleClickZoom:true,zoomControl:false,attributionControl:true,tap:false});
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© <a href="https://openstreetmap.org/copyright">OSM</a>',maxZoom:19}).addTo(m);
+    var b=[];
+    pts.forEach(function(p){
+      var mk=L.circleMarker([p[0],p[1]],{radius:6,color:'#fff',weight:2,fillColor:'#c0392b',fillOpacity:1}).addTo(m);
+      mk.bindTooltip(p[2],{direction:'top',offset:[0,-4],opacity:0.95});
+      b.push([p[0],p[1]]);
+    });
+    if(b.length===1){ m.setView(b[0],15); } else { m.fitBounds(b,{padding:[28,28],maxZoom:15}); }
+  }
+  cityMap('map-lima', LIMA_PTS);
+  cityMap('map-cusco', CUSCO_PTS);
+  cityMap('map-paracas', PARACAS_PTS);
+});
+</script>
+
+<script>
+/* ── Filter bar: auto-build area buttons, price/healthy toggles, live count, hide-on-scroll ── */
+(function(){
+  var bar=document.getElementById('filterbar'),countEl=document.getElementById('fbCount'),citiesRow=document.getElementById('fbCities');
+  if(!bar||!countEl||!citiesRow) return;
+  var sections=[].slice.call(document.querySelectorAll('section.section[data-area]'));
+  if(!sections.length){bar.style.display='none';return;}
+  var areas=[];
+  sections.forEach(function(s){var a=s.getAttribute('data-area'),t=s.querySelector('.section-title');var label=t?t.textContent.trim():a;if(!areas.some(function(x){return x.a===a;}))areas.push({a:a,label:label});});
+  var html='<button class="fb-btn fb-city active" data-city="all">All</button>';
+  areas.forEach(function(x){html+='<button class="fb-btn fb-city" data-city="'+x.a+'">'+x.label+'</button>';});
+  citiesRow.innerHTML=html;
+  if(areas.length<2) citiesRow.style.display='none';
+  var cuisRow=document.getElementById('fbCuisines'),cuis=[];
+  sections.forEach(function(s){[].slice.call(s.querySelectorAll('.card[data-cuisine]')).forEach(function(c){var cu=c.getAttribute('data-cuisine');if(cu&&cuis.indexOf(cu)===-1)cuis.push(cu);});});
+  if(cuisRow){var ch='';cuis.sort().forEach(function(cu){ch+='<button class="fb-btn fb-cuisine" data-cuisine="'+cu+'">'+cu.charAt(0).toUpperCase()+cu.slice(1)+'</button>';});cuisRow.innerHTML=ch;if(cuis.length<2)cuisRow.style.display='none';}
+  var state={city:'all',price:null,healthy:false,cuisine:null};
+  function apply(){var shown=0;sections.forEach(function(sec){var cityOk=(state.city==='all')||(sec.getAttribute('data-area')===state.city);sec.style.display=cityOk?'':'none';if(!cityOk)return;[].slice.call(sec.querySelectorAll('.card[data-price]')).forEach(function(card){var pOk=(state.price===null)||(card.getAttribute('data-price')===state.price);var hOk=(!state.healthy)||(card.getAttribute('data-healthy')==='1');var cOk=(state.cuisine===null)||(card.getAttribute('data-cuisine')===state.cuisine);var vis=pOk&&hOk&&cOk;card.style.display=vis?'':'none';if(vis)shown++;});});countEl.textContent=shown+' shown';}
+  bar.addEventListener('click',function(e){var b=e.target.closest?e.target.closest('.fb-btn'):null;if(!b)return;
+    if(b.classList.contains('fb-city')){state.city=b.getAttribute('data-city');[].slice.call(bar.querySelectorAll('.fb-city')).forEach(function(x){x.classList.toggle('active',x===b);});window.scrollTo({top:0,behavior:'smooth'});}
+    else if(b.classList.contains('fb-price')){var p=b.getAttribute('data-price');if(state.price===p){state.price=null;b.classList.remove('active');}else{state.price=p;[].slice.call(bar.querySelectorAll('.fb-price')).forEach(function(x){x.classList.toggle('active',x===b);});}}
+    else if(b.classList.contains('fb-healthy')){state.healthy=!state.healthy;b.classList.toggle('active',state.healthy);}
+    else if(b.classList.contains('fb-cuisine')){var cu=b.getAttribute('data-cuisine');if(state.cuisine===cu){state.cuisine=null;b.classList.remove('active');}else{state.cuisine=cu;[].slice.call(bar.querySelectorAll('.fb-cuisine')).forEach(function(x){x.classList.toggle('active',x===b);});}}
+    apply();});
+  var lastY=0;window.addEventListener('scroll',function(){var y=window.pageYOffset||document.documentElement.scrollTop;if(y>140&&y>lastY)bar.classList.add('fb-hidden');else bar.classList.remove('fb-hidden');lastY=y;},{passive:true});
+  /* closed-today: device-local day/time; only ever shows "closed"/"opens" when data says so — never falsely "open" */
+  (function(){var now=new Date(),day=now.getDay(),mins=now.getHours()*60+now.getMinutes();
+    [].slice.call(document.querySelectorAll('.card')).forEach(function(card){var badges=card.querySelector('.card-badges');if(!badges)return;
+      var cd=(card.getAttribute('data-closed-days')||'').split(',').map(function(s){return s.trim();}).filter(Boolean);
+      if(cd.indexOf(String(day))!==-1){var b=document.createElement('span');b.className='badge badge-closed';b.textContent='Closed today';badges.appendChild(b);return;}
+      var of=card.getAttribute('data-open-from');if(of){var p=of.split(':'),om=(+p[0])*60+(+(p[1]||0));if(mins<om){var b2=document.createElement('span');b2.className='badge badge-soon';b2.textContent='Opens '+of;badges.appendChild(b2);}}
+    });})();
+  apply();
+})();
+/* ── PWA: register the network-first service worker ── */
+if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('./sw.js').catch(function(){});});}
+</script>
+</body>
+</html>
